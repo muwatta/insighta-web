@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Insighta Labs+</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .profile-card { border: 1px solid #ccc; padding: 10px; margin: 10px; border-radius: 8px; }
+        button { padding: 8px 12px; margin: 5px; cursor: pointer; }
+        input, select { padding: 6px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Insighta Labs+</h1>
+    <div id="auth-section">
+        <button id="login-btn">Login with GitHub</button>
+    </div>
+    <div id="app" style="display: none;">
+        <h2>Dashboard</h2>
+        <p>Welcome, <span id="username"></span> (<span id="role"></span>)</p>
+        <button id="logout-btn">Logout</button>
+
+        <h3>Filters</h3>
+        <input type="text" id="filter-gender" placeholder="Gender (male/female)">
+        <input type="text" id="filter-country" placeholder="Country ID (NG, KE, ...)">
+        <input type="number" id="filter-min-age" placeholder="Min age">
+        <input type="number" id="filter-max-age" placeholder="Max age">
+        <button id="apply-filters">Apply Filters</button>
+
+        <h3>Profiles</h3>
+        <div id="profiles-list"></div>
+        <div id="pagination"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://demographic-query-engine.vercel.app';
+
+        async function checkAuth() {
+            const resp = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+            if (resp.ok) {
+                const data = await resp.json();
+                document.getElementById('username').innerText = data.username;
+                document.getElementById('role').innerText = data.role;
+                document.getElementById('auth-section').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                loadProfiles();
+            } else {
+                document.getElementById('auth-section').style.display = 'block';
+                document.getElementById('app').style.display = 'none';
+            }
+        }
+
+        document.getElementById('login-btn').onclick = () => {
+            window.location.href = `${API_BASE}/auth/github/`;
+        };
+
+        document.getElementById('logout-btn').onclick = async () => {
+            await fetch(`${API_BASE}/auth/logout/`, { method: 'POST', credentials: 'include' });
+            window.location.reload();
+        };
+
+        let currentParams = { page: 1, limit: 10 };
+
+        async function loadProfiles() {
+            const params = new URLSearchParams(currentParams);
+            const gender = document.getElementById('filter-gender').value;
+            const country = document.getElementById('filter-country').value;
+            const minAge = document.getElementById('filter-min-age').value;
+            const maxAge = document.getElementById('filter-max-age').value;
+            if (gender) params.append('gender', gender);
+            if (country) params.append('country_id', country);
+            if (minAge) params.append('min_age', minAge);
+            if (maxAge) params.append('max_age', maxAge);
+
+            const resp = await fetch(`${API_BASE}/api/profiles/?${params.toString()}`, {
+                credentials: 'include',
+                headers: { 'X-API-Version': '1' }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                renderProfiles(data.data);
+                renderPagination(data);
+            } else {
+                console.error('Failed to load profiles');
+            }
+        }
+
+        function renderProfiles(profiles) {
+            const container = document.getElementById('profiles-list');
+            container.innerHTML = '';
+            profiles.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'profile-card';
+                div.innerHTML = `<strong>${p.name}</strong> (${p.gender}, ${p.age}) - ${p.country_name}`;
+                container.appendChild(div);
+            });
+        }
+
+        function renderPagination(pagination) {
+            const container = document.getElementById('pagination');
+            container.innerHTML = '';
+            for (let i = 1; i <= pagination.total_pages; i++) {
+                const btn = document.createElement('button');
+                btn.innerText = i;
+                if (i === pagination.page) btn.disabled = true;
+                btn.onclick = () => {
+                    currentParams.page = i;
+                    loadProfiles();
+                };
+                container.appendChild(btn);
+            }
+        }
+
+        document.getElementById('apply-filters').onclick = () => {
+            currentParams.page = 1;
+            loadProfiles();
+        };
+
+        checkAuth();
+    </script>
+</body>
+</html>
